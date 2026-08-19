@@ -19,14 +19,14 @@ The critical path is **data model → ingestion → retrieval → LLM → citati
 
 ## Phase 0 — Prerequisites & foundation
 
-- [ ] Install toolchain: Python 3.12+, `uv`, Node 20+, `pnpm` (see [README](../README.md))
-- [ ] Create Supabase project and collect credentials ([supabase-setup](guides/supabase-setup.md))
-- [ ] Create OpenAI API key (needed from Phase 6 onward)
-- [ ] Set `USER_AGENT` in `data/download.py` and download sample 10-K corpus:
+- [x] Install toolchain: Python 3.12+, `uv`, Node 20+, `pnpm` (see [README](../README.md))
+- [x] Create Supabase project and collect credentials ([supabase-setup](guides/supabase-setup.md))
+- [x] Create Gemini API key (needed from Phase 6 onward)
+- [x] Set `USER_AGENT` in `data/download.py` and download sample 10-K corpus:
   ```bash
   uv run data/download.py
   ```
-- [ ] Confirm `data/downloads/manifest.json` lists AAPL, MSFT, NVDA, AMZN, GOOGL filings (2021–2025)
+- [X] Confirm `data/downloads/manifest.json` lists AAPL, MSFT, NVDA, AMZN, GOOGL filings (2021–2025)
 
 ---
 
@@ -34,9 +34,9 @@ The critical path is **data model → ingestion → retrieval → LLM → citati
 
 Goal: a running FastAPI service with a migrated Supabase schema.
 
-- [ ] Init backend deps and project layout ([backend-setup](guides/backend-setup.md))
-- [ ] `app/config.py` — settings module, fail fast on missing env vars
-- [ ] `app/main.py` — FastAPI app, CORS, health check (`GET /health`)
+- [X] Init backend deps and project layout ([backend-setup](guides/backend-setup.md))
+- [X] `app/config.py` — settings module, fail fast on missing env vars
+- [X] `app/main.py` — FastAPI app, CORS, health check (`GET /health`)
 - [ ] SQLAlchemy models in `app/database/models/`:
   - [ ] `users`
   - [ ] `source_documents`
@@ -58,7 +58,7 @@ Goal: a running FastAPI service with a migrated Supabase schema.
 
 ## Phase 2 — Auth (full stack)
 
-Goal: analysts can sign in with email; backend rejects unauthenticated requests.
+Goal: analysts can sign in with email; backend rejects unauthenticated requests.Are all the dependencies functional? And just tell me one thing, why do we even need a venv? And I just wanna ask if the dependencies are in the venv or outside of the venv.
 
 **Backend**
 
@@ -107,7 +107,7 @@ Goal: SEC filings in the corpus are parsed, chunked, embedded, and stored in Sup
 - [ ] Chunking strategy (size + overlap; store chunk index, page, section, ticker, filing type, year)
 - [ ] Write `source_documents` rows with filing metadata from `manifest.json`
 - [ ] Write `document_chunks` rows with text + metadata
-- [ ] OpenAI embedding generation → store `vector(1536)` per chunk
+- [ ] Gemini embedding generation → store `vector(1536)` per chunk
 - [ ] Generated `tsvector` populated for full-text search
 - [ ] Idempotent re-run (skip already-ingested documents)
 - [ ] Unit tests: chunking logic, metadata extraction

@@ -24,7 +24,7 @@ flowchart LR
         db[(Postgres<br/>chats, documents, chunks<br/>pgvector + full-text)]
     end
 
-    openai[OpenAI<br/>LLM + embeddings]
+    gemini[Gemini<br/>LLM + embeddings]
     corpus[SEC filing corpus]
     ingestion[Ingestion pipeline<br/>download, parse, chunk, embed]
 
@@ -34,11 +34,11 @@ flowchart LR
     browser -->|chat request + JWT| backend
     backend -->|verify user| auth
     backend -->|retrieve passages<br/>persist chats + citations| db
-    backend -->|generate grounded answer| openai
+    backend -->|generate grounded answer| gemini
     backend -->|stream answer + citations| browser
 
     corpus --> ingestion
-    ingestion -->|create embeddings| openai
+    ingestion -->|create embeddings| gemini
     ingestion -->|store documents + chunks| db
 ```
 
@@ -67,7 +67,7 @@ Backend:
 - FastAPI + Uvicorn
 - Pydantic v2 + pydantic-settings
 - PydanticAI for typed LLM orchestration
-- OpenAI SDK for generation and embeddings
+- `google-genai` SDK for generation and embeddings (Gemini)
 - Supabase Python client for server-side database access
 - SQLAlchemy models + Alembic migrations for schema management
 - Supabase `pgvector` for semantic search
@@ -82,7 +82,7 @@ Persistence:
 
 ## System Boundaries
 
-The frontend is responsible for user interaction, local UI state, and sending the authenticated user's request to the backend. It should never hold service-role credentials, run retrieval logic, call OpenAI directly, or write privileged records to Supabase.
+The frontend is responsible for user interaction, local UI state, and sending the authenticated user's request to the backend. It should never hold service-role credentials, run retrieval logic, call Gemini directly, or write privileged records to Supabase.
 
 The backend is responsible for request authorization, retrieval, prompt construction, LLM execution, citation validation, streaming responses, and durable persistence. It owns all privileged credentials and is the only service allowed to use the Supabase service-role key.
 
@@ -200,7 +200,7 @@ Retrieval and grounding remain independent from PydanticAI. This keeps ingestion
 
 Document Copilot uses hybrid retrieval:
 
-1. Embed the user's query with the configured OpenAI embedding model.
+1. Embed the user's query with the configured Gemini embedding model.
 2. Run a semantic search over `document_chunks.embedding` with `pgvector`.
 3. Run a lexical search over `document_chunks.search_vector` with Postgres full-text search.
 4. Fuse the two ranked lists in Python with Reciprocal Rank Fusion.
@@ -272,7 +272,7 @@ Streaming responsibilities:
 
 Supabase tables should be small and product-oriented:
 
-- `profiles`: one row per authenticated user, keyed by Supabase `auth.users.id`.
+- `users`: one row per authenticated user, keyed by Supabase `auth.users.id` (distinct table, `public.users` vs. `auth.users`).
 - `chat_threads`: thread metadata, owner, title, timestamps.
 - `chat_messages`: user and assistant messages in order, with AI SDK-compatible message JSON where useful.
 - `message_citations`: normalized citation records linked to assistant messages.
@@ -395,7 +395,7 @@ Supabase remains hosted and stores the durable retrieval data. The Railway backe
 ## Non-Goals
 
 - No Next.js, SSR, server components, or frontend route handlers.
-- No direct OpenAI calls from the browser.
+- No direct Gemini calls from the browser.
 - No separate managed vector database outside Supabase.
 - No multi-tenant architecture.
 - No external market/news data.
