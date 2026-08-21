@@ -1,0 +1,17 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ],
+  "compilerOptions": {
+    // shadcn's CLI reads this root file (not tsconfig.app.json) for alias
+    // resolution — keep baseUrl/paths here even though this file has no
+    // "include" of its own. ignoreDeprecations silences TS 6's baseUrl warning.
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "ignoreDeprecations": "6.0"
+  }
+}

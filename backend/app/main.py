@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.me import router as me_router
 from app.config import settings
 
 app = FastAPI(title="Document Copilot API")
@@ -12,6 +13,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(me_router)
 
 
 @app.get("/health")

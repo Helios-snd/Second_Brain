@@ -35,3 +35,16 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's DI idiom is `Depends(...)` as a default arg — not the mutable-default
+# footgun B008 otherwise guards against, since FastAPI resolves it per-request.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.Security",
+]
