@@ -83,18 +83,18 @@ Goal: end-to-end chat UI streaming from FastAPI, no real retrieval yet.
 
 **Backend**
 
-- [ ] Chat thread CRUD: list threads, create thread, load message history
-- [ ] `POST /chat/stream` — accepts AI SDK message format, streams a stubbed assistant reply
-- [ ] Persist user + assistant messages to `chat_messages` after stream completes
-- [ ] `403` when user accesses another user's thread
+- [X] Chat thread CRUD: list threads, create thread, load message history
+- [X] `POST /chat/stream` — accepts AI SDK message format, streams a stubbed assistant reply
+- [X] Persist user + assistant messages to `chat_messages` after stream completes
+- [X] `403` when user accesses another user's thread
 
 **Frontend**
 
-- [ ] React Router: login, chat list, chat thread routes
-- [ ] AI SDK chat primitives pointed at `POST /chat/stream` with Supabase bearer token
-- [ ] Thread sidebar (past conversations)
-- [ ] Basic message list + input + streaming indicator
-- [ ] Verify: create thread, send message, see streamed stub response, reload and see history
+- [X] React Router: login, chat list, chat thread routes
+- [X] AI SDK chat primitives pointed at `POST /chat/stream` with Supabase bearer token
+- [X] Thread sidebar (past conversations)
+- [X] Basic message list + input + streaming indicator
+- [X] Verify: create thread, send message, see streamed stub response, reload and see history
 
 ---
 

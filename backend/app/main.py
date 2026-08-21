@@ -1,6 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from postgrest.exceptions import APIError
+from starlette.responses import JSONResponse
 
+from app.api.chat import router as chat_router
 from app.api.me import router as me_router
 from app.config import settings
 
@@ -15,6 +18,12 @@ app.add_middleware(
 )
 
 app.include_router(me_router)
+app.include_router(chat_router)
+
+
+@app.exception_handler(APIError)
+async def supabase_api_error_handler(request: Request, exc: APIError) -> JSONResponse:
+    return JSONResponse(status_code=502, content={"detail": "Upstream database error"})
 
 
 @app.get("/health")

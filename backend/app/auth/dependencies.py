@@ -8,7 +8,7 @@ with 401 before any chat or retrieval work runs.
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from supabase import AuthApiError
+from supabase import AsyncClient, AuthApiError
 from supabase_auth.types import User
 
 from app.database.supabase import get_user_client
@@ -40,3 +40,15 @@ async def get_current_user(
         raise _unauthorized()
 
     return response.user
+
+
+async def get_db_client(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+) -> AsyncClient:
+    """A Supabase client scoped to the caller's own token, so RLS applies as the
+    caller. Depends on the same `_bearer_scheme` sub-dependency as
+    `get_current_user` — FastAPI's per-request dependency cache means the
+    Authorization header is only parsed once."""
+    if credentials is None:
+        raise _unauthorized()
+    return get_user_client(credentials.credentials)

@@ -27,4 +27,12 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    // shadcn-generated hooks (e.g. use-mobile) set initial state from a
+    // browser API inside their effect — standard generated pattern.
+    files: ['src/hooks/**/*.{ts,tsx}'],
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
 ])
