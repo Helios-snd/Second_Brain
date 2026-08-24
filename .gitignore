@@ -25,9 +25,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Data / artifacts (downloaded corpus files are large, never check in)
+# Data / artifacts (downloaded/converted corpus files are large, never check in)
 /data/downloads/*
 !/data/downloads/.gitkeep
+/data/markdown/*
+!/data/markdown/.gitkeep
 *.parquet
 
 # IDE / OS
@@ -39,3 +41,9 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Agent instructions / TODOs (local-only)
+CLAUDE.md
+**/CLAUDE.md
+docs/todos.md
+**/todos.md
