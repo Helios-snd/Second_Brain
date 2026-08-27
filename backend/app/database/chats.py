@@ -1,10 +1,13 @@
 """Typed query helpers for chat threads and messages.
 
 Persistence goes through the Supabase client (PostgREST), not a SQLAlchemy
-session — there is no async SQLAlchemy engine in this codebase; the ORM
-models exist only for Alembic autogenerate. Callers pick the RLS-scoped
-client for normal reads/writes, and reach for `thread_exists_privileged`
-only to disambiguate 403 from 404 (see app/api/chat.py).
+session, so RLS ("users see only their own chats") applies automatically.
+`app/database/session.py`'s async engine exists for retrieval, where pgvector
+distance ordering and ranked full-text search need real SQL PostgREST can't
+express — but chat data is per-user-scoped, so it stays on the RLS-enforcing
+client. Callers pick the RLS-scoped client for normal reads/writes, and reach
+for `thread_exists_privileged` only to disambiguate 403 from 404 (see
+app/api/chat.py).
 """
 
 from datetime import UTC, datetime
@@ -68,6 +71,19 @@ async def insert_message(
         .execute()
     )
     return result.data[0]
+
+
+async def insert_citations(message_id: str, citations: list[dict[str, Any]]) -> None:
+    """Normalized `message_citations` rows for an assistant message.
+
+    `message_citations` has an RLS SELECT policy but no INSERT policy (see the
+    core-tables migration), so this writes with the service-role client — same
+    precedent as ingestion. `citations` items are `{"chunk_id", "excerpt"}`.
+    """
+    if not citations:
+        return
+    rows = [{"message_id": message_id, **citation} for citation in citations]
+    await get_service_client().table("message_citations").insert(rows).execute()
 
 
 async def touch_thread(client: AsyncClient, thread_id: str) -> None:

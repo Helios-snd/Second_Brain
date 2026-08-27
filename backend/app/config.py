@@ -29,9 +29,20 @@ class Settings(BaseSettings):
 
     # --- Gemini (LLM + embeddings) ---
     gemini_api_key: str
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.7-flash"
     gemini_embedding_model: str = "gemini-embedding-001"
     gemini_embedding_dimensions: int = 1536
+
+    # --- Assistant (grounded-answer LLM agent) ---
+    agent_request_limit: int = 20  # UsageLimits(request_limit=...) cap per turn — bounds tool-call loops
+    agent_temperature: float = 0.0  # deterministic analyst answers
+
+    # --- Retrieval (hybrid search: pgvector + Postgres full-text, fused with RRF) ---
+    retrieval_candidate_k: int = 50  # per-leg candidate pool size before fusion
+    retrieval_top_k: int = 10  # final fused passages returned
+    retrieval_rrf_k: int = 60  # RRF smoothing constant
+    retrieval_neighbor_radius: int = 1  # chunks before/after each hit, same document
+    retrieval_fts_config: str = "english"  # must match the migration's to_tsvector('english', chunk_text)
 
     # --- Server ---
     allowed_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]

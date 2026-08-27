@@ -1,10 +1,11 @@
-"""Chat thread CRUD and the stubbed streaming reply.
+"""Chat thread CRUD and the grounded streaming reply.
 
 `POST /chat/stream` speaks the AI SDK v5 UI Message Stream protocol via
 `pydantic_ai.ui.vercel_ai`'s request/response types, reused directly rather
-than hand-rolled — see docs/architecture.md's streaming contract. There's no
-real agent yet (Phase 6), so the reply is a fixed canned string; only the
-wire protocol is real.
+than hand-rolled — see docs/architecture.md's streaming contract. The turn
+itself (retrieve → agent → grounding check) runs in `app/chat/orchestrator.py`;
+this module owns request parsing, the ownership check, streaming, and
+persistence.
 """
 
 import uuid
@@ -14,15 +15,19 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from postgrest.exceptions import APIError
 from pydantic import BaseModel, TypeAdapter, ValidationError
-from pydantic_ai.ui.vercel_ai.request_types import RequestData, TextUIPart, UIMessage
+from pydantic_ai import AgentRunError
+from pydantic_ai.ui.vercel_ai.request_types import RequestData, UIMessage
 from pydantic_ai.ui.vercel_ai.response_types import DoneChunk, ErrorChunk
 from starlette.responses import StreamingResponse
 from supabase import AsyncClient
 from supabase_auth.types import User
 
 from app.auth.dependencies import get_current_user, get_db_client
+from app.chat import messages as chat_messages
 from app.chat import streaming
+from app.chat.orchestrator import TurnResult, run_turn
 from app.database import chats
+from app.grounding.validator import GroundingError
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -85,23 +90,37 @@ async def stream_chat(
 
     await _require_owned_thread(thread_id, client)
 
-    last_message = body.messages[-1]
-    user_text = "".join(part.text for part in last_message.parts if isinstance(part, TextUIPart))
+    history, question = chat_messages.to_history_and_prompt(body.messages)
 
-    # `last_message.id` is client-generated (AI SDK's default `generateId()`,
+    # The wire message id is client-generated (AI SDK's default `generateId()`,
     # not a UUID) — `chat_messages.id` is a Postgres UUID column, so a
-    # server-generated id is used here instead of the wire id.
+    # server-generated id is used here instead.
     await chats.insert_message(
         client,
         message_id=str(uuid.uuid4()),
         thread_id=str(thread_id),
         role="user",
-        content=user_text,
-        parts=[{"type": "text", "text": user_text, "state": "done"}],
+        content=question,
+        parts=[{"type": "text", "text": question, "state": "done"}],
     )
 
+    # The turn runs before the response starts so retrieval / LLM / grounding
+    # failures still map to clean HTTP status codes. A grounding *violation*
+    # (`GroundingError`) is deliberately not one of those — it becomes an
+    # in-stream error event so the partial turn is visibly rejected, not a 500.
+    turn: TurnResult | None = None
+    try:
+        turn = await run_turn(
+            user_id=user.id, thread_id=str(thread_id), history=history, question=question
+        )
+    except GroundingError:
+        turn = None
+    except AgentRunError as exc:
+        # UnexpectedModelBehavior, UsageLimitExceeded, ModelHTTPError all subclass this.
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "The assistant is unavailable") from exc
+
     return StreamingResponse(
-        _event_source(client, str(thread_id)),
+        _event_source(client, str(thread_id), turn),
         media_type="text/event-stream",
         headers=streaming.STREAM_HEADERS,
     )
@@ -133,13 +152,24 @@ def _row_to_ui_message(row: dict[str, Any]) -> UIMessage:
     return UIMessage(id=str(row["id"]), role=row["role"], parts=parts)
 
 
-async def _event_source(client: AsyncClient, thread_id: str) -> AsyncIterator[str]:
+async def _event_source(
+    client: AsyncClient, thread_id: str, turn: TurnResult | None
+) -> AsyncIterator[str]:
     assistant_id = str(uuid.uuid4())
-    full_text = ""
-    async for chunk in streaming.iter_stub_reply_chunks(assistant_id):
-        if hasattr(chunk, "delta"):
-            full_text += chunk.delta
+
+    if turn is None:  # grounding violation — emit an error event, persist nothing
+        async for chunk in streaming.iter_violation_chunks(assistant_id):
+            yield streaming.encode_chunk(chunk)
+        yield streaming.encode_chunk(DoneChunk())
+        return
+
+    citation_data = chat_messages.citation_parts(turn.passages)
+    async for chunk in streaming.iter_answer_chunks(assistant_id, turn.answer_text, citation_data):
         yield streaming.encode_chunk(chunk)
+
+    parts: list[dict[str, Any]] = [{"type": "text", "text": turn.answer_text, "state": "done"}]
+    if citation_data:
+        parts.append({"type": chat_messages.CITATION_PART_TYPE, "data": citation_data})
 
     try:
         await chats.insert_message(
@@ -147,15 +177,19 @@ async def _event_source(client: AsyncClient, thread_id: str) -> AsyncIterator[st
             message_id=assistant_id,
             thread_id=thread_id,
             role="assistant",
-            content=full_text,
-            parts=[{"type": "text", "text": full_text, "state": "done"}],
+            content=turn.answer_text,
+            parts=parts,
+        )
+        await chats.insert_citations(
+            assistant_id,
+            [{"chunk_id": str(c.chunk_id), "excerpt": c.excerpt} for c in turn.citations],
         )
         await chats.touch_thread(client, thread_id)
     except APIError:
         # The HTTP status (200, text/event-stream) is already committed by this
         # point in the stream — a mid-stream failure can only surface as an
         # in-band error event, not a 502 status. Pre-stream failures (ownership
-        # check, user-message insert above) still map to clean HTTP status codes.
+        # check, user-message insert, the turn itself) still map to clean status codes.
         yield streaming.encode_chunk(ErrorChunk(error_text="Failed to save assistant reply"))
 
     yield streaming.encode_chunk(DoneChunk())
