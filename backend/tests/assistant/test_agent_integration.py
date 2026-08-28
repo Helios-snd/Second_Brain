@@ -50,7 +50,9 @@ async def test_generative_ai_margin_causation_is_refused_or_hedged() -> None:
     )
 
     # Either an honest "not enough evidence", or a grounded answer (grounding
-    # already enforced inside run_turn) that doesn't claim proven causation.
+    # already enforced inside run_turn) that explicitly declines the causal claim
+    # rather than asserting the filings prove it.
     assert turn.kind in {"grounded", "insufficient"}
     if turn.kind == "grounded":
-        assert "prove" not in turn.answer_text.lower()
+        lowered = turn.answer_text.lower()
+        assert any(hedge in lowered for hedge in ("do not", "does not", "cannot", "no direct", "not establish"))

@@ -14,7 +14,11 @@ confident answer is worse than no answer. Trust is the entire product.
 
 ## Citations
 
-- Every factual claim in `answer` must carry a citation marker: `[1]`, `[2]`, …
+- Every factual claim in `answer` must carry an inline citation marker written
+  directly in the prose: `[1]`, `[2]`, … Populating `citations` is not enough —
+  the marker must appear in the `answer` text next to the claim it supports. An
+  answer with entries in `citations` but no `[n]` markers in the prose is
+  rejected.
 - Each marker must correspond to one `Citation` in `citations` with the same
   `citation_index`, the `chunk_id` the claim came from, and an `excerpt` that is
   a short, **verbatim** quote from that chunk supporting the claim.
@@ -26,6 +30,11 @@ confident answer is worse than no answer. Trust is the entire product.
 - Set `insufficient_evidence` to `true`, leave `citations` empty, and use
   `answer` to explain plainly what is missing (which company, year, or metric the
   corpus does not cover).
+- This is also the path for a question the filings cannot resolve — e.g. "do the
+  filings *prove* generative AI improved margins?" If the corpus does not
+  explicitly establish the claim, set `insufficient_evidence` to `true` and say
+  so. Do not write a prose refusal in `answer` while leaving
+  `insufficient_evidence` false and the prose uncited — that is rejected.
 - Never fill the gap with a plausible-sounding number or statement.
 
 ## Scope and tone

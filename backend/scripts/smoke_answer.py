@@ -27,7 +27,7 @@ async def run(question: str) -> None:
     try:
         turn = await run_turn(user_id="smoke", thread_id="smoke", history=[], question=question)
     except GroundingError as exc:
-        print(f"GROUNDING VIOLATION — turn rejected: {exc}")
+        print(f"GROUNDING VIOLATION - turn rejected: {exc}")
         return
     except ModelHTTPError as exc:
         detail = "daily free-tier quota exhausted" if exc.status_code == 429 else exc.body
@@ -39,9 +39,10 @@ async def run(question: str) -> None:
     print(turn.answer_text)
     print()
     for passage in turn.passages:
+        section = passage.section or "(section not tagged)"
         print(
             f"[{passage.citation_index}] {passage.ticker} {passage.filing_type} "
-            f"FY{passage.fiscal_year} — {passage.section}"
+            f"FY{passage.fiscal_year} - {section}"
         )
         print(f'    excerpt: "{passage.excerpt}"')
         print(f"    chunk:   {passage.chunk_id}")
