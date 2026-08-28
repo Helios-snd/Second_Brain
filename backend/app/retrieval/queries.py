@@ -10,6 +10,7 @@ need that join.
 
 from __future__ import annotations
 
+import re
 import uuid
 
 from pgvector.sqlalchemy import Vector
@@ -19,6 +20,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models.document_chunk import EMBEDDING_DIMENSIONS
 from app.retrieval.types import RankedChunkHit, SearchFilters
+
+_WORD_RE = re.compile(r"[a-z0-9]+")
+
+
+def to_or_tsquery(query_text: str) -> str:
+    """Turn a natural-language question into an OR `tsquery` string.
+
+    `websearch_to_tsquery` ANDs every term, so a full analyst question ("How did
+    Apple's Services revenue change across its 2021-2025 10-Ks?") matches no
+    single chunk and the full-text leg contributes nothing to the hybrid fusion.
+    ORing the terms lets `ts_rank_cd` rank chunks by how many terms they hit,
+    which is what RRF wants — and `retrieval_candidate_k` caps the pool.
+
+    Postgres' `english` dictionary stems and drops stopwords itself, so this only
+    splits to word tokens and drops 1-char noise. Returns `""` when nothing
+    usable remains (the caller then skips the leg).
+    """
+    seen: dict[str, None] = {}
+    for token in _WORD_RE.findall(query_text.lower()):
+        if len(token) > 1:
+            seen.setdefault(token, None)
+    return " | ".join(seen)
 
 _FILTER_CLAUSE = """
       AND (:ticker ::text IS NULL OR chunk_metadata ->> 'ticker' = :ticker ::text)
@@ -43,7 +66,7 @@ _SEMANTIC_SQL = text(
 _FTS_SQL = text(
     f"""
     SELECT id, ts_rank_cd(search_vector, query) AS score
-    FROM document_chunks, websearch_to_tsquery(:fts_config, :query_text) query
+    FROM document_chunks, to_tsquery(:fts_config, :query_text) query
     WHERE search_vector @@ query
     {_FILTER_CLAUSE}
     ORDER BY score DESC
@@ -85,13 +108,16 @@ async def fulltext_search(
     session: AsyncSession, query_text: str, filters: SearchFilters, limit: int
 ) -> list[RankedChunkHit]:
     """Ranked full-text search via the GIN index (`ix_document_chunks_search_vector`)
-    on the generated `search_vector` column. `websearch_to_tsquery` (not
-    `plainto_tsquery`) so quoted phrases / AND / OR / "-" degrade gracefully
-    for natural-language analyst questions."""
+    on the generated `search_vector` column. The question is turned into an OR
+    `tsquery` by `to_or_tsquery` — see there for why AND (the
+    `websearch_to_tsquery` default) makes this leg dead weight."""
+    tsquery = to_or_tsquery(query_text)
+    if not tsquery:
+        return []
     result = await session.execute(
         _FTS_SQL,
         {
-            "query_text": query_text,
+            "query_text": tsquery,
             "fts_config": settings.retrieval_fts_config,
             "limit": limit,
             **_filter_params(filters),

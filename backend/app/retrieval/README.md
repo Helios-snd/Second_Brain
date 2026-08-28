@@ -18,7 +18,7 @@ flowchart TD
     Q --> EMB["embeddings.embed_query()<br/>Gemini RETRIEVAL_QUERY, L2-normalized"]
 
     EMB --> SEM["queries.semantic_search()<br/>pgvector cosine, HNSW index<br/>candidate_k results"]
-    Q --> FTS["queries.fulltext_search()<br/>ts_rank_cd + websearch_to_tsquery, GIN index<br/>candidate_k results"]
+    Q --> FTS["queries.fulltext_search()<br/>question → OR tsquery (to_or_tsquery)<br/>ts_rank_cd, GIN index<br/>candidate_k results"]
 
     SEM --> RRF["fusion.reciprocal_rank_fusion()<br/>sum 1/(k+rank) across both legs<br/>rank position only, not raw score"]
     FTS --> RRF
@@ -41,7 +41,7 @@ parallelize them wasn't worth the added complexity.
 |---|---|
 | `types.py` | `SearchFilters`, `RankedChunkHit`, `RetrievedPassage` — Pydantic models shared by this package, its tests, and future Phase 6 agent tools |
 | `embeddings.py` | `embed_query()` — Gemini client + L2 normalization for query-time embeddings. Deliberately duplicates `ingest/embed.py`'s ~15 lines rather than importing across the `app/`↔`ingest/` boundary |
-| `queries.py` | The two retrieval legs: `semantic_search()`, `fulltext_search()`. Raw SQL via SQLAlchemy `text()`, filtered on `document_chunks.chunk_metadata` (no join — filing fields are denormalized there specifically so retrieval doesn't need one) |
+| `queries.py` | The two retrieval legs: `semantic_search()`, `fulltext_search()`. Raw SQL via SQLAlchemy `text()`, filtered on `document_chunks.chunk_metadata` (no join — filing fields are denormalized there specifically so retrieval doesn't need one). `to_or_tsquery()` turns the question into an **OR** `tsquery` — `websearch_to_tsquery` ANDs every term, which matches zero chunks for a full analyst question and leaves the full-text leg contributing nothing |
 | `fusion.py` | `reciprocal_rank_fusion()` — pure function, no I/O |
 | `retriever.py` | `DocumentRetriever` — the single `.search(query, filters)` entry point that hides both legs, fusion, and hydration behind one call (same shape as querying a Pinecone index) |
 | `../database/session.py` | Async SQLAlchemy engine/session over `settings.database_url` — the one place in the codebase that talks to Postgres directly instead of through the Supabase client, because pgvector distance ordering and ranked FTS need real SQL PostgREST can't express |

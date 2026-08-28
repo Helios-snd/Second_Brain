@@ -14,10 +14,27 @@ Run with: uv run pytest -m integration tests/retrieval/
 
 import pytest
 
+from app.database.session import get_session_factory
+from app.retrieval import queries
 from app.retrieval.retriever import DocumentRetriever
 from app.retrieval.types import SearchFilters
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
+
+
+async def test_fulltext_leg_matches_a_natural_language_question() -> None:
+    """Regression: the leg used to pass the whole question to
+    `websearch_to_tsquery`, which ANDs every term and matched zero chunks for
+    any real question — silently reducing hybrid search to semantic-only."""
+    async with get_session_factory()() as session:
+        hits = await queries.fulltext_search(
+            session,
+            "How did Apple's Services revenue change across its 2021-2025 10-Ks?",
+            SearchFilters(ticker="AAPL"),
+            limit=20,
+        )
+
+    assert hits  # the OR tsquery finds keyword-heavy chunks the AND query never could
 
 
 async def test_apple_revenue_mix_question_returns_apple_passages() -> None:

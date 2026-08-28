@@ -85,12 +85,12 @@ async def test_semantic_search_passes_ticker_and_filing_type_through() -> None:
     assert session.last_params["filing_type"] == "10-K"
 
 
-async def test_fulltext_search_passes_query_text_and_configured_fts_config() -> None:
+async def test_fulltext_search_passes_or_tsquery_and_configured_fts_config() -> None:
     session = _FakeSession([])
 
     await queries.fulltext_search(session, "Apple revenue mix", SearchFilters(), limit=10)
 
-    assert session.last_params["query_text"] == "Apple revenue mix"
+    assert session.last_params["query_text"] == "apple | revenue | mix"
     assert session.last_params["fts_config"] == "english"  # settings.retrieval_fts_config default
 
 
@@ -101,3 +101,29 @@ async def test_fulltext_search_returns_hits_in_row_order() -> None:
     hits = await queries.fulltext_search(session, "AWS margin", SearchFilters(), limit=10)
 
     assert [h.chunk_id for h in hits] == [chunk_1, chunk_2]
+
+
+async def test_fulltext_search_skips_the_query_when_nothing_usable_remains() -> None:
+    session = _FakeSession([_FakeRow(uuid.uuid4(), 0.9)])
+
+    hits = await queries.fulltext_search(session, "? - !", SearchFilters(), limit=10)
+
+    assert hits == []
+    assert session.last_params is None  # never executed
+
+
+@pytest.mark.parametrize(
+    ("question", "expected"),
+    [
+        (
+            "How did Apple's Services revenue change across its 2021-2025 10-Ks?",
+            "how | did | apple | services | revenue | change | across | its | 2021 | 2025 | 10 | ks",
+        ),
+        ("NVIDIA  data center", "nvidia | data | center"),
+        ("AWS AWS aws margin margin", "aws | margin"),  # deduped, case-folded
+        ("A 5G iPhone", "5g | iphone"),  # 1-char tokens dropped
+        ("???", ""),
+    ],
+)
+def test_to_or_tsquery(question: str, expected: str) -> None:
+    assert queries.to_or_tsquery(question) == expected
