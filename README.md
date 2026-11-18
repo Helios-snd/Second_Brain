@@ -1,4 +1,4 @@
-# Document Copilot
+# Second Brain
 
 An internal AI chatbot that lets analysts query a corpus of documents in plain English and get sourced, citable answers.
 
